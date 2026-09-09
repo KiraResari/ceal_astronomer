@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/gestures.dart';
@@ -50,6 +49,8 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
 
   double _scale = 1.0;
   Offset _pan = Offset.zero;
+
+  int _viewportInteractionGeneration = 0;
 
   static const double _minScale = 0.01;
   static const double _maxScale = 1000.0;
@@ -187,6 +188,7 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
         _selectedId = null;
         _scale = 1;
         _pan = Offset.zero;
+        _viewportInteractionGeneration++;
       });
       if (mounted) _message('Loaded ${file.path}');
     } catch (e) {
@@ -346,6 +348,7 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
         return Listener(
           onPointerSignal: (event) => _onPointerSignal(event, size),
           child: GestureDetector(
+            key: ValueKey(_viewportInteractionGeneration),
             behavior: HitTestBehavior.opaque,
             onPanUpdate: (details) {
               setState(() => _pan += details.delta);
