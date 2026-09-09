@@ -1,4 +1,4 @@
-![CealAstronomerIcon](assets\images\CealAstronomerIcon.png)
+![CealAstronomerIcon](assets/images/CealAstronomerIcon.png)
 
 # The Ceal Astronomer
 
