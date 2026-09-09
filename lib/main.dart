@@ -243,8 +243,9 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Celestial Tracker'),
         actions: [
+          _toolbar(),
+          const Spacer(),
           TextButton.icon(
             onPressed: _newSystem,
             icon: const Icon(Icons.note_add_outlined),
@@ -263,19 +264,12 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
+      body: Row(
         children: [
-          _toolbar(),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: _viewport()),
-                SizedBox(
-                  width: 320,
-                  child: _detailsPanel(),
-                ),
-              ],
-            ),
+          Expanded(child: _viewport()),
+          SizedBox(
+            width: 320,
+            child: _detailsPanel(),
           ),
         ],
       ),
@@ -326,7 +320,7 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
               onPressed: () => _advance(1),
               icon: const Icon(Icons.add),
             ),
-            const Spacer(),
+            const SizedBox(width: 16),
             Text('${_formatNumber(_scale)}×'),
             const SizedBox(width: 8),
             OutlinedButton.icon(
