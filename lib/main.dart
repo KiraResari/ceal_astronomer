@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'body_editor.dart';
 import 'celestial_body.dart';
@@ -456,7 +457,17 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
                 ),
                 title: Text(other.name),
                 subtitle: Text('${_formatNumber(d)} km'),
-                onTap: () => setState(() => _selectedId = other.id),
+                onTap: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: "$d"),
+                  );
+
+                  if (mounted) {
+                    _message(
+                      'Copied distance to ${other.name}: ${_formatNumber(d)} km',
+                    );
+                  }
+                },
               );
             }),
         ],
