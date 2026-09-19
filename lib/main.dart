@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import 'body_editor.dart';
 import 'celestial_body.dart';
+import 'novean_date.dart';
 import 'orbit_math.dart';
 import 'solar_system_painter.dart';
 
@@ -46,6 +47,12 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
   List<CelestialBody> _bodies = [];
   String? _selectedId;
   double _currentDay = 0;
+  NoveanDate _startingDate = const NoveanDate(
+    year: 1,
+    isAN: true,
+    month: 1,
+    day: 1,
+  );
 
   double _scale = 1.0;
   Offset _pan = Offset.zero;
@@ -114,6 +121,12 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
       _bodies = [];
       _selectedId = null;
       _currentDay = 0;
+      _startingDate = const NoveanDate(
+        year: 1,
+        isAN: true,
+        month: 1,
+        day: 1,
+      );
       _scale = 1;
       _pan = Offset.zero;
     });
@@ -146,6 +159,7 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
     final document = <String, dynamic>{
       'version': 1,
       'currentDay': _currentDay,
+      'startingDate': _startingDate.toJson(),
       'bodies': _bodies.map((b) => b.toJson()).toList(),
     };
 
@@ -179,11 +193,33 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
       }
 
       final loaded = bodyJson
-          .map((e) => CelestialBody.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) => CelestialBody.fromJson(Map<String, dynamic>.from(e as Map)),
+          )
           .toList();
+
+      final startingDateJson = raw['startingDate'];
+
+      final loadedStartingDate =
+      startingDateJson is Map
+          ? NoveanDate.fromJson(
+        Map<String, dynamic>.from(startingDateJson),
+      )
+          : const NoveanDate(
+        year: 1,
+        isAN: true,
+        month: 1,
+        day: 1,
+      );
+      if (!NoveanCalendar.isValidDate(loadedStartingDate)) {
+        throw const FormatException(
+          'The save file contains an invalid Novean starting date.',
+        );
+      }
 
       setState(() {
         _currentDay = (raw['currentDay'] as num?)?.toDouble() ?? 0;
+        _startingDate = loadedStartingDate;
         _bodies = loaded;
         _selectedId = null;
         _scale = 1;
@@ -197,9 +233,8 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
   }
 
   void _message(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _onPointerSignal(PointerSignalEvent event, Size size) {
@@ -242,6 +277,143 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
     setState(() => _selectedId = nearest?.id);
   }
 
+  NoveanDate get _currentNoveanDate {
+    final wholeDays = _currentDay.floor();
+
+    return NoveanCalendar.addDays(_startingDate, wholeDays);
+  }
+
+  Future<void> _setStartingDate() async {
+    final yearController = TextEditingController(
+      text: _startingDate.year.toString(),
+    );
+
+    final monthController = TextEditingController(
+      text: _startingDate.month.toString(),
+    );
+
+    final dayController = TextEditingController(
+      text: _startingDate.day.toString(),
+    );
+
+    var isAN = _startingDate.isAN;
+
+    final result = await showDialog<NoveanDate>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Set day 0 date'),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SegmentedButton<bool>(
+                            segments: const [
+                              ButtonSegment(value: false, label: Text('BN')),
+                              ButtonSegment(value: true, label: Text('AN')),
+                            ],
+                            selected: {isAN},
+                            onSelectionChanged: (selection) {
+                              setDialogState(() {
+                                isAN = selection.first;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: yearController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Year',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: monthController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Month',
+                        helperText: '1–13',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: dayController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Day',
+                        helperText: '1–24, or 1–12/13 in Nalfeeita',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final year = int.tryParse(yearController.text.trim());
+                    final month = int.tryParse(monthController.text.trim());
+                    final day = int.tryParse(dayController.text.trim());
+
+                    if (year == null || month == null || day == null) {
+                      _message('Year, month and day must be integers.');
+                      return;
+                    }
+
+                    final date = NoveanDate(
+                      year: year,
+                      isAN: isAN,
+                      month: month,
+                      day: day,
+                    );
+
+                    if (!NoveanCalendar.isValidDate(date)) {
+                      _message('That is not a valid Novean date.');
+                      return;
+                    }
+
+                    Navigator.pop(context, date);
+                  },
+                  child: const Text('Set date'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    yearController.dispose();
+    monthController.dispose();
+    dayController.dispose();
+
+    if (result == null) {
+      return;
+    }
+
+    setState(() {
+      _startingDate = result;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -270,10 +442,7 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
       body: Row(
         children: [
           Expanded(child: _viewport()),
-          SizedBox(
-            width: 320,
-            child: _detailsPanel(),
-          ),
+          SizedBox(width: 320, child: _detailsPanel()),
         ],
       ),
     );
@@ -292,9 +461,25 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
               label: const Text('Add body'),
             ),
             const SizedBox(width: 16),
-            Text(
-              'Day ${_formatNumber(_currentDay)}',
-              style: Theme.of(context).textTheme.titleMedium,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _currentNoveanDate.formatted,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  'Simulation day ${_formatNumber(_currentDay)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Set starting date',
+              onPressed: _setStartingDate,
+              icon: const Icon(Icons.calendar_month),
             ),
             const SizedBox(width: 20),
             const Text('Step (days)'),
@@ -303,7 +488,9 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
               width: 100,
               child: TextField(
                 controller: _stepController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   isDense: true,
                   border: OutlineInputBorder(),
@@ -381,100 +568,102 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
       ),
       child: selected == null
           ? const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Click a celestial body to select it.\n\n'
-                'Mouse wheel: zoom\n'
-                'Left-drag: pan',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      )
-          : ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: selected.color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
+              child: Padding(
+                padding: EdgeInsets.all(24),
                 child: Text(
-                  selected.name,
-                  style: Theme.of(context).textTheme.headlineSmall,
+                  'Click a celestial body to select it.\n\n'
+                  'Mouse wheel: zoom\n'
+                  'Left-drag: pan',
+                  textAlign: TextAlign.center,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          FilledButton.tonalIcon(
-            onPressed: _editSelected,
-            icon: const Icon(Icons.edit),
-            label: const Text('Edit selected'),
-          ),
-          const SizedBox(height: 6),
-          OutlinedButton.icon(
-            onPressed: _deleteSelected,
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('Delete selected'),
-          ),
-          const Divider(height: 28),
-          _property('Phase', _formatNumber(selected.phase)),
-          _property('Semi-major axis',
-              '${_formatNumber(selected.semiMajorAxisKm)} km'),
-          _property('Eccentricity', _formatNumber(selected.eccentricity)),
-          _property('Period',
-              '${_formatNumber(selected.orbitalPeriodDays)} days'),
-          _property(
-            'Longitude of perihelion',
-            '${_formatNumber(selected.longitudeOfPerihelionDeg)}°',
-          ),
-          const Divider(height: 28),
-          Text(
-            'Distances',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          if (_bodies.length == 1)
-            const Text('No other celestial bodies.')
-          else
-            ..._bodies.where((b) => b.id != selected.id).map((other) {
-              final d = distanceKm(selected.positionKm, other.positionKm);
-              return ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: other.color,
-                    shape: BoxShape.circle,
-                  ),
+            )
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: selected.color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        selected.name,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ),
+                  ],
                 ),
-                title: Text(other.name),
-                subtitle: Text('${_formatNumber(d)} km'),
-                onTap: () async {
-                  await Clipboard.setData(
-                    ClipboardData(text: "$d"),
-                  );
+                const SizedBox(height: 14),
+                FilledButton.tonalIcon(
+                  onPressed: _editSelected,
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Edit selected'),
+                ),
+                const SizedBox(height: 6),
+                OutlinedButton.icon(
+                  onPressed: _deleteSelected,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete selected'),
+                ),
+                const Divider(height: 28),
+                _property('Phase', _formatNumber(selected.phase)),
+                _property(
+                  'Semi-major axis',
+                  '${_formatNumber(selected.semiMajorAxisKm)} km',
+                ),
+                _property('Eccentricity', _formatNumber(selected.eccentricity)),
+                _property(
+                  'Period',
+                  '${_formatNumber(selected.orbitalPeriodDays)} days',
+                ),
+                _property(
+                  'Longitude of perihelion',
+                  '${_formatNumber(selected.longitudeOfPerihelionDeg)}°',
+                ),
+                const Divider(height: 28),
+                Text(
+                  'Distances',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if (_bodies.length == 1)
+                  const Text('No other celestial bodies.')
+                else
+                  ..._bodies.where((b) => b.id != selected.id).map((other) {
+                    final d = distanceKm(selected.positionKm, other.positionKm);
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: other.color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      title: Text(other.name),
+                      subtitle: Text('${_formatNumber(d)} km'),
+                      onTap: () async {
+                        await Clipboard.setData(ClipboardData(text: "$d"));
 
-                  if (mounted) {
-                    _message(
-                      'Copied distance to ${other.name}: ${_formatNumber(d)} km',
+                        if (mounted) {
+                          _message(
+                            'Copied distance to ${other.name}: ${_formatNumber(d)} km',
+                          );
+                        }
+                      },
                     );
-                  }
-                },
-              );
-            }),
-        ],
-      ),
+                  }),
+              ],
+            ),
     );
   }
 
@@ -484,7 +673,9 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(name, style: const TextStyle(color: Colors.white60))),
+          Expanded(
+            child: Text(name, style: const TextStyle(color: Colors.white60)),
+          ),
           const SizedBox(width: 8),
           Flexible(child: Text(value, textAlign: TextAlign.right)),
         ],
